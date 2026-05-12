@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+# Pydantic models define request/response shapes for the API.
+
 # User schemas
 class UserCreate(BaseModel):
     username: str

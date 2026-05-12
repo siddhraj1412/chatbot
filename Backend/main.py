@@ -23,8 +23,10 @@ from prompts import SYSTEM_PROMPT, QUESTION_SUGGESTION_PROMPT
 
 load_dotenv()
 
+# FastAPI app wiring auth, sessions, streaming chat, and suggestions.
 app = FastAPI(title="AI Chatbot API")
 
+# Allow the frontend to call this API from a different origin.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,7 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB on startup
+# Initialize the DB as soon as the server starts.
 @app.on_event("startup")
 async def startup():
     init_db()
@@ -42,6 +44,7 @@ async def startup():
 
 @app.post("/auth/register")
 def register(user: UserCreate):
+    # Create a new user if the email/username is unused.
     user_id = create_user(user.username, user.email, user.password)
     if not user_id:
         raise HTTPException(status_code=400, detail="Email or username already exists")
@@ -49,6 +52,7 @@ def register(user: UserCreate):
 
 @app.post("/auth/login")
 def login(user: UserLogin):
+    # Validate credentials and return basic profile info.
     db_user = get_user_by_email(user.email)
     if not db_user or db_user["password_hash"] != hash_password(user.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -62,21 +66,25 @@ def login(user: UserLogin):
 
 @app.post("/sessions/create")
 def create_new_session(data: SessionCreate):
+    # Create an empty session and return its id.
     session_id = create_session(data.user_id, data.session_name)
     return {"session_id": session_id, "session_name": data.session_name}
 
 @app.get("/sessions/{user_id}")
 def get_sessions(user_id: int):
+    # List sessions for the sidebar.
     sessions = get_user_sessions(user_id)
     return {"sessions": [dict(s) for s in sessions]}
 
 @app.get("/history/{session_id}")
 def get_history(session_id: int):
+    # Load chat history for a session.
     messages = get_session_messages(session_id)
     return {"messages": [dict(m) for m in messages]}
 
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: int):
+    # Remove a session and its messages.
     import sqlite3
     conn = sqlite3.connect("chatbot.db")  # change "chatbot.db" to your actual DB filename
     cursor = conn.cursor()
@@ -92,7 +100,7 @@ async def chat_stream(session_id: int, user_id: int, message: str):
 
     async def event_generator():
         try:
-            # Try router agent first
+            # 1) Try rule-based agents first (fast answers).
             agent_response = router_agent(message)
             if agent_response:
                 save_message(session_id, "user", message)
@@ -103,7 +111,7 @@ async def chat_stream(session_id: int, user_id: int, message: str):
                 yield f"data: {json.dumps({'done': True, 'full_response': agent_response})}\n\n"
                 return
 
-            # Load history into message list
+            # 2) Load DB history and build the LLM message list.
             messages_from_db = get_session_messages(session_id)
             chat_history = load_memory_from_db(session_id, [dict(m) for m in messages_from_db])
 
@@ -114,6 +122,7 @@ async def chat_stream(session_id: int, user_id: int, message: str):
 
             save_message(session_id, "user", message)
 
+            # 3) Stream tokens back to the frontend (SSE).
             async for chunk in llm.astream(llm_messages):
                 token = chunk.content
                 if token:
@@ -121,6 +130,7 @@ async def chat_stream(session_id: int, user_id: int, message: str):
                     yield f"data: {json.dumps({'token': token})}\n\n"
                     await asyncio.sleep(0)
 
+            # 4) Save the final assistant response.
             save_message(session_id, "assistant", full_response)
             yield f"data: {json.dumps({'done': True, 'full_response': full_response})}\n\n"
 
@@ -142,6 +152,7 @@ async def chat_stream(session_id: int, user_id: int, message: str):
 
 @app.post("/suggestions")
 async def get_suggestions(data: dict):
+    # Ask the LLM for short follow-up questions.
     try:
         response_text = data.get("response", "")
         llm = ChatGroq(

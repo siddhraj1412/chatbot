@@ -1,3 +1,4 @@
+# System prompt used for every chat response.
 SYSTEM_PROMPT = """You are Aria, an intelligent and friendly AI assistant. 
 You are helpful, concise, and conversational.
 
@@ -17,6 +18,7 @@ Rules:
 Current date and time context will be provided when relevant.
 """
 
+# Prompt for generating short follow-up questions.
 QUESTION_SUGGESTION_PROMPT = """Based on this AI response, generate exactly 3 short follow-up questions the user might want to ask next.
 
 AI Response: {response}

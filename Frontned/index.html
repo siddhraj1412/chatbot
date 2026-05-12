@@ -350,6 +350,7 @@
 </div>
 
 <script>
+  // Frontend flow: auth -> load sessions -> chat -> stream -> suggestions.
   const API = 'http://localhost:8000';
   let currentUser = null;
   let currentSessionId = null;
@@ -580,6 +581,7 @@
     let fullResponse = '';
     let streamDone   = false;
 
+    // SSE stream from the backend so tokens arrive live.
     const url = `${API}/chat/stream?session_id=${currentSessionId}&user_id=${currentUser.id}&message=${encodeURIComponent(message)}`;
     const evtSource = new EventSource(url);
 
