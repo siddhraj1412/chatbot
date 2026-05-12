@@ -5,6 +5,9 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+load_dotenv()  # looks for .env in the same folder as main.py
+
 import json
 import asyncio
 
@@ -79,24 +82,23 @@ async def chat_stream(session_id: int, user_id: int, message: str):
 
     async def event_generator():
         try:
-            # Route to agent first
+            # Try router agent first
             agent_response = router_agent(message)
             if agent_response:
                 save_message(session_id, "user", message)
                 save_message(session_id, "assistant", agent_response)
-                # Stream agent response word by word
                 for word in agent_response.split():
                     yield f"data: {json.dumps({'token': word + ' '})}\n\n"
-                    await asyncio.sleep(0.05)
+                    await asyncio.sleep(0.03)
                 yield f"data: {json.dumps({'done': True, 'full_response': agent_response})}\n\n"
                 return
 
-            # Load memory for this session
+            # Load history into message list
             messages_from_db = get_session_messages(session_id)
             chat_history = load_memory_from_db(session_id, [dict(m) for m in messages_from_db])
+
             llm_messages = [SystemMessage(content=SYSTEM_PROMPT)] + chat_history + [HumanMessage(content=message)]
 
-            # Stream from Groq
             llm = get_llm()
             full_response = ""
 
@@ -107,11 +109,14 @@ async def chat_stream(session_id: int, user_id: int, message: str):
                 if token:
                     full_response += token
                     yield f"data: {json.dumps({'token': token})}\n\n"
+                    await asyncio.sleep(0)
 
             save_message(session_id, "assistant", full_response)
             yield f"data: {json.dumps({'done': True, 'full_response': full_response})}\n\n"
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()  # prints full error in terminal
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(
@@ -119,10 +124,10 @@ async def chat_stream(session_id: int, user_id: int, message: str):
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
             "X-Accel-Buffering": "no"
         }
     )
-
 # --- Question Suggestion Route ---
 
 @app.post("/suggestions")
@@ -131,7 +136,7 @@ async def get_suggestions(data: dict):
         response_text = data.get("response", "")
         llm = ChatGroq(
             api_key=os.getenv("GROQ_API_KEY"),
-            model_name="llama3-8b-8192",
+            model_name="llama-3.3-70b-versatile",
             temperature=0.5
         )
         prompt = QUESTION_SUGGESTION_PROMPT.format(response=response_text)
