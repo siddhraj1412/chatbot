@@ -75,6 +75,16 @@ def get_history(session_id: int):
     messages = get_session_messages(session_id)
     return {"messages": [dict(m) for m in messages]}
 
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: int):
+    import sqlite3
+    conn = sqlite3.connect("chatbot.db")  # change "chatbot.db" to your actual DB filename
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+    cursor.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Session deleted"}
 # --- Chat Route (SSE Streaming) ---
 
 @app.get("/chat/stream")

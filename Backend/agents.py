@@ -36,11 +36,12 @@ def time_agent(query: str) -> str:
     return None
 
 # --- Router Agent ---
+    # --- Router Agent ---
 def router_agent(query: str) -> str | None:
     """
     Routes query to the right agent.
     Returns a string response if an agent handles it,
-    or None if it should go to the main LLM.
+    or None if it should go to the main LLB.
     """
     # Check time/date queries first
     time_response = time_agent(query)
@@ -48,7 +49,7 @@ def router_agent(query: str) -> str | None:
         return time_response
 
     # Check if it looks like a math query
-    math_keywords = ["calculate", "compute", "what is", "solve", "how much is", "+", "-", "*", "/"]
+    math_keywords = ["calculate", "compute", "solve", "how much is", "+", "-", "*", "/"]
     has_numbers = bool(re.search(r'\d', query))
     has_math_keyword = any(kw in query.lower() for kw in math_keywords)
 
